@@ -1,7 +1,7 @@
 from datetime import date
 
 from storage import load_data, save_data
-from logic import add_expense, get_all
+from logic import add_expense, get_all, delete_expense
 
 
 def show_all(data):
@@ -16,7 +16,7 @@ def show_all(data):
 def main():
 	data = load_data()
 	while True:
-		print("\n1. Add expense\n2. Show all\n0. Exit")
+		print("\n1. Add expense\n2. Show all\n3. Delete\n0. Exit")
 		choice = input("Your choice: ").strip()
 		if choice == "1":
 			title = input("Title: ").strip()
@@ -27,6 +27,14 @@ def main():
 			print("Added.")
 		elif choice == "2":
 			show_all(data)
+		elif choice == "3":
+			expense_id = int(input("ID to delete: "))
+			if delete_expense(data, expense_id):
+				save_data(data)
+				print("Deleted.")
+			else:
+				print("No expense with that ID.")
+
 		elif choice == "0":
 			break
 		else:
