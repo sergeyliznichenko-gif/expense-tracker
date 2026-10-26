@@ -25,3 +25,17 @@ def delete_expense(data, expense_id):
 		return False
 	data['expenses'].remove(expense)
 	return True
+
+def find_by_category(data, category):
+	result = []
+	for expense in data["expenses"]:
+		if expense["category"].lower() == category.lower():
+			result.append(expense)
+	return result
+
+def total_by_category(data):
+	totals = {}
+	for expense in data["expenses"]:
+		cat = expense["category"]
+		totals[cat] = totals.get(cat, 0) + expense["amount"]
+	return totals
