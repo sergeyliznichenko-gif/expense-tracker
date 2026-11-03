@@ -4,8 +4,7 @@ A command-line program for tracking personal expenses. Each expense has a date, 
 
 ## Requirements
 
-Python 3. No extra libraries are needed.
-
+Python 3 and Flask. Install the libraries with `pip install -r requirements.txt`.
 ## How to run
 
     python cli.py add DATE CATEGORY AMOUNT TITLE
@@ -67,9 +66,49 @@ If `data.json` is missing or damaged, the program starts with an empty list.
 - `storage.py`: loading and saving `data.json`
 - `tests.py`: checks for the functions in `logic.py`
 - `main.py`: an older menu version of the program (optional)
+- `app.py`: the Flask web service (routes for the web version)
+- `db.py`: SQLite storage used by the web service
 
 ## Tests
 
     python tests.py
 
 It prints `All tests passed` if everything works.
+
+## Web service (lab 7)
+
+Install and run:
+
+    python -m venv venv
+    source venv/bin/activate        # Windows Git Bash: source venv/Scripts/activate
+    pip install -r requirements.txt
+    python app.py
+
+The server runs at http://127.0.0.1:5000. Data is stored in `data.db` (SQLite), which is created automatically.
+
+### Routes
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | /items | all expenses (JSON) |
+| GET | /items?category=food | expenses of one category |
+| POST | /items | add an expense (JSON body: date, category, amount, title) |
+| DELETE | /items/ID | delete an expense |
+| GET | /report | total amount per category |
+
+### Examples
+
+    curl http://127.0.0.1:5000/items
+    curl "http://127.0.0.1:5000/items?category=food"
+    curl -X POST http://127.0.0.1:5000/items \
+         -H "Content-Type: application/json" \
+         -d '{"date": "2026-10-21", "category": "food", "amount": 45.5, "title": "Milk"}'
+    curl -X DELETE http://127.0.0.1:5000/items/1
+    curl http://127.0.0.1:5000/report
+
+### Errors
+
+A wrong request gets code 400 (bad data) or 404 (not found) and a JSON message, never a server crash:
+
+    curl -i -X POST http://127.0.0.1:5000/items
+    curl -i -X DELETE http://127.0.0.1:5000/items/99
