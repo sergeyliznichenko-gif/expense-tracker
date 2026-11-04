@@ -112,3 +112,21 @@ A wrong request gets code 400 (bad data) or 404 (not found) and a JSON message, 
 
     curl -i -X POST http://127.0.0.1:5000/items
     curl -i -X DELETE http://127.0.0.1:5000/items/99
+
+## Running the server
+
+Run everything from the project folder (it contains `data.db`).
+
+1. First terminal, the server:
+
+       source venv/Scripts/activate      # Linux/macOS: source venv/bin/activate
+       python -m waitress --listen=127.0.0.1:8000 app:app
+
+2. Second terminal, the tunnel (always start the server first, then the tunnel):
+
+       cloudflared tunnel --url http://127.0.0.1:8000
+
+Cloudflare prints an address like `https://random-words.trycloudflare.com`.
+Open `.../items` on it. Stop with `Ctrl+C` in both terminals.
+
+The server listens on 127.0.0.1 only, so it is not visible in the local network.
