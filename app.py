@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect
 
 import db
 import logic
@@ -62,6 +62,9 @@ def report():
 	expenses = db.load()
 	return jsonify(logic.total_by_category({"expenses": expenses}))
 
+@app.get("/")
+def index():
+    return redirect("/items")
 
 if __name__ == "__main__":
 	app.run(debug=True)
