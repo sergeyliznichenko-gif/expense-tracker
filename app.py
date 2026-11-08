@@ -1,11 +1,13 @@
 from datetime import datetime
 
 from flask import Flask, request, jsonify, redirect
+from flask_cors import CORS
 
 import db
 import logic
 
 app = Flask(__name__)
+CORS(app, origins=["https://liznichenko.pp.ua"])
 app.json.ensure_ascii = False
 db.init()
 
