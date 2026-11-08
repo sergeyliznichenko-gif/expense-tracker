@@ -4,3 +4,5 @@ data.json
 data.backup
 venv/
 data.db
+.env
+backups/
