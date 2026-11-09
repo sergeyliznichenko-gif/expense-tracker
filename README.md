@@ -93,7 +93,6 @@ The server runs at http://127.0.0.1:5000. Data is stored in `data.db` (SQLite), 
 | GET | /items | all expenses (JSON) |
 | GET | /items?category=food | expenses of one category |
 | POST | /items | add an expense (JSON body: date, category, amount, title) |
-| DELETE | /items/ID | delete an expense |
 | GET | /report | total amount per category |
 
 ### Examples
@@ -103,7 +102,6 @@ The server runs at http://127.0.0.1:5000. Data is stored in `data.db` (SQLite), 
     curl -X POST http://127.0.0.1:5000/items \
          -H "Content-Type: application/json" \
          -d '{"date": "2026-10-21", "category": "food", "amount": 45.5, "title": "Milk"}'
-    curl -X DELETE http://127.0.0.1:5000/items/1
     curl http://127.0.0.1:5000/report
 
 ### Errors
@@ -111,7 +109,7 @@ The server runs at http://127.0.0.1:5000. Data is stored in `data.db` (SQLite), 
 A wrong request gets code 400 (bad data) or 404 (not found) and a JSON message, never a server crash:
 
     curl -i -X POST http://127.0.0.1:5000/items
-    curl -i -X DELETE http://127.0.0.1:5000/items/99
+    curl -i -X DELETE -H "X-Admin-Token: $TOKEN" http://127.0.0.1:5000/admin/items/99
 
 ## Running the server
 
@@ -130,3 +128,21 @@ Cloudflare prints an address like `https://random-words.trycloudflare.com`.
 Open `.../items` on it. Stop with `Ctrl+C` in both terminals.
 
 The server listens on 127.0.0.1 only, so it is not visible in the local network.
+
+## Безпека
+
+Перевірено 2026-11-09. Для кожної загрози: що зроблено для перевірки і чим закрито.
+
+| Загроза | Перевірка і результат | Статус, чим закрито |
+| --- | --- | --- |
+| SQL-ін’єкція | POST з category = `'; DROP TABLE expenses; --`, потім GET /items: таблиця ціла, текст збережено як звичайна категорія | закрито: параметри `?` у всіх запитах (db.py) |
+| XSS у фронтенді | запис з title = `<img src=x onerror=alert(1)>`: на сторінці показано як текст, вікна alert немає | закрито: дані виводяться через `textContent` |
+| сервер розробки в інтернеті | тунель дивиться на waitress, а не на `python app.py` | закрито: waitress; `debug=True` лише в блоці `if __name__ == "__main__"`, тобто для локального запуску |
+| доступ в обхід Cloudflare | `netstat -ano \| grep :8000`: порт слухає лише 127.0.0.1 | закрито: публічної IP немає, доступ лише через тунель |
+| флуд запитами | 100 POST у циклі через https://api...: 65 відповідей 400 і 35 відповідей 429 | закрито: rate limiting у Cloudflare |
+| адмінка з інтернету | /admin/export з телефона через інтернет дає 404; через Tailscale без токена 403, з токеном працює | закрито: правило тунелю, перевірка CF-Connecting-IP, токен |
+| публічне видалення записів | маршрут DELETE /items/<id> прибрано, видалення лише через /admin/ з токеном | закрито |
+| секрети в git | `git log -p \| grep -i token` і пошук .env, cert.pem, UUID.json в історії: порожньо | закрито: .env у .gitignore, токен тунелю в репозиторії немає |
+| втрата даних | базу відновлено з копії backups/data-2026-11-09.db, сайт працює | закрито: backup.py щодня о 20:00 (планувальник Windows) |
+| копії на тому ж диску | копії лежать на одному диску з базою | відкрито: від поломки диска не рятує; прийнятно для навчального проєкту, але раз на тиждень копіюю backups/ на інший пристрій |
+| вразливі бібліотеки | `pip-audit -r requirements.txt`: No known vulnerabilities found | закрито; перевіряти повторно перед здаванням наступних лаб |
