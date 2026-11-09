@@ -34,7 +34,6 @@ def list_items():
 	return jsonify(db.load(category))
 
 
-@app.post("/items")
 def check_item(data):
 	"""Validate one item. Return ((date, category, amount, title), None) or (None, error)."""
 	if not isinstance(data, dict):
@@ -73,11 +72,6 @@ def add_item():
 	if error:
 		return jsonify({"error": error}), 400
 	return jsonify({"id": db.add(*item)}), 201
-@app.delete("/items/<int:item_id>")
-def delete_item(item_id):
-	if db.delete(item_id):
-		return jsonify({"deleted": item_id})
-	return jsonify({"error": "not found"}), 404
 
 
 @app.get("/admin/export")
