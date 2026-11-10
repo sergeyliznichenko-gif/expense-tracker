@@ -61,19 +61,21 @@ If `data.json` is missing or damaged, the program starts with an empty list.
 
 ## Files
 
-- `cli.py`: the command-line interface (all input and output)
-- `logic.py`: functions for adding, finding, deleting and summing expenses (no `print` or `input`)
-- `storage.py`: loading and saving `data.json`
-- `tests.py`: checks for the functions in `logic.py`
-- `main.py`: an older menu version of the program (optional)
-- `app.py`: the Flask web service (routes for the web version)
-- `db.py`: SQLite storage used by the web service
+- `app.py`: the Flask web service (public routes and `/admin/` routes)
+- `models.py`: the `Item` class (one expense)
+- `logic.py`: functions over a list of `Item` objects (no `print`, no `input`, no database)
+- `db.py`: SQLite storage: tables `categories`, `expenses`, `audit_log`; the database path comes from `DB_PATH` (default `data.db`)
+- `migrate.py`: one-time migration of an old database (text category) to the `categories` table
+- `backup.py`: copies `data.db` into `backups/` (a daily scheduled task runs it)
+- `frontend/index.html`: the web page deployed on Netlify
+- `tests/`: pytest tests (`test_logic.py`, `test_app.py`)
+- `legacy/`: the old console version (`cli.py`, `storage.py`, `logic.py`, `test.py`) with its own `data.json`
 
 ## Tests
 
-    python tests.py
+    pytest -v
 
-It prints `All tests passed` if everything works.
+The tests run without a server and on a temporary empty database (`DB_PATH`), never on `data.db`. `tests/test_logic.py` checks the `Item` class and the functions in `logic.py`; `tests/test_app.py` checks the Flask routes, including bad requests and the `/admin/` routes.
 
 ## Web service (lab 7)
 
@@ -128,6 +130,41 @@ Cloudflare prints an address like `https://random-words.trycloudflare.com`.
 Open `.../items` on it. Stop with `Ctrl+C` in both terminals.
 
 The server listens on 127.0.0.1 only, so it is not visible in the local network.
+
+## Database
+
+SQLite file `data.db` with three tables:
+
+| Table | Columns |
+|---|---|
+| categories | id, name (unique), monthly_limit |
+| expenses | id, date, category_id (links to categories), amount, title |
+| audit_log | id, ts, action (`add` or `delete`), item_id, details |
+
+`GET /items` and `GET /report` return the category as text, so the web page does not change. An older database with a text category is converted once with `python migrate.py` (make a backup first).
+
+## Admin routes
+
+They need the `X-Admin-Token` header, and the tunnel blocks `/admin/` from the internet. Create a `.env` file in the project folder (it is in `.gitignore`, never commit it):
+
+    ADMIN_TOKEN=a-long-random-string
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | /admin/export | all expenses (JSON) |
+| POST | /admin/import | add a list of expenses (JSON list, at most 1000, all or nothing) |
+| DELETE | /admin/items/ID | delete an expense |
+| GET | /admin/log | the action log (newest first) |
+
+## Backups
+
+    python backup.py
+
+It copies `data.db` to `backups/data-DATE.db`. A Windows scheduled task (`expense-backup`) runs it daily at 20:00.
+
+## Console version
+
+The command-line version described in the first part of this file now lives in `legacy/`. Run it from that folder (`cd legacy`, then `python cli.py list`); it keeps its own `data.json`.
 
 ## Безпека
 
