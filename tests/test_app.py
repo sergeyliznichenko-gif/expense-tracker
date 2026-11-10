@@ -75,3 +75,19 @@ def test_import_is_all_or_nothing(client):
     r = client.post("/admin/import", json=data, headers=ADMIN)
     assert r.status_code == 400
     assert client.get("/items").get_json() == []
+
+
+def test_report_limits_joins_both_tables(client):
+    add_item(client, category="Food", amount=100)
+    add_item(client, category="Food", amount=50)
+    add_item(client, category="Bus", amount=10)
+    rows = client.get("/report/limits").get_json()
+    assert rows[0] == {"name": "food", "total": 150.0, "monthly_limit": None}
+    assert len(rows) == 2
+
+
+def test_log_limit_parameter(client):
+    for _ in range(3):
+        add_item(client)
+    log = client.get("/admin/log?limit=2", headers=ADMIN).get_json()
+    assert len(log) == 2

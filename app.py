@@ -109,7 +109,15 @@ def admin_delete_item(item_id):
 @app.get("/admin/log")
 def admin_log():
 	require_admin()
-	return jsonify(db.log_entries())
+	limit = request.args.get("limit", default=50, type=int)
+	limit = max(1, min(limit, 500))
+	return jsonify(db.log_entries(limit))
+
+
+@app.get("/report/limits")
+def report_limits():
+	"""The JOIN report: total per category next to its monthly limit."""
+	return jsonify(db.totals_with_limits(request.args.get("month")))
 
 
 @app.get("/report")
