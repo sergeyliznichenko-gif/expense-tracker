@@ -31,7 +31,7 @@ def list_items():
 	category = request.args.get("category")
 	if category is not None:
 		category = category.strip().lower()
-	return jsonify(db.load(category))
+	return jsonify([item.to_dict() for item in db.load(category)])
 
 
 def check_item(data):
@@ -77,7 +77,7 @@ def add_item():
 @app.get("/admin/export")
 def admin_export():
 	require_admin()
-	return jsonify(db.load())
+	return jsonify([item.to_dict() for item in db.load()])
 
 
 @app.post("/admin/import")
@@ -109,7 +109,7 @@ def admin_delete_item(item_id):
 @app.get("/report")
 def report():
 	expenses = db.load()
-	return jsonify(logic.total_by_category({"expenses": expenses}))
+	return jsonify(logic.total_by_category(expenses))
 
 @app.get("/")
 def index():

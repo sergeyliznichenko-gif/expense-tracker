@@ -1,3 +1,4 @@
+from models import Item
 import sqlite3
 
 DB = "data.db"
@@ -31,7 +32,7 @@ def load(category=None):
 				(category,)).fetchall()
 	result = []
 	for row in rows:
-		result.append(dict(row))
+		result.append(Item.from_row(row))
 	return result
 
 
