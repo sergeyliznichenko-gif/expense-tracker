@@ -106,6 +106,12 @@ def admin_delete_item(item_id):
 	if not db.delete(item_id):
 		return jsonify({"error": "not found"}), 404
 	return jsonify({"deleted": item_id})
+@app.get("/admin/log")
+def admin_log():
+	require_admin()
+	return jsonify(db.log_entries())
+
+
 @app.get("/report")
 def report():
 	expenses = db.load()
