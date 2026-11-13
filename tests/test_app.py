@@ -205,3 +205,20 @@ def test_log_limit_parameter(make_client):
     for _ in range(3):
         add_item(boss)
     assert len(boss.get("/admin/log?limit=2").get_json()) == 2
+
+
+def test_health_needs_no_login(make_client):
+    r = make_client().get("/health")
+    assert r.status_code == 200
+    assert r.get_json() == {"status": "ok"}
+
+
+def test_health_reports_database_error(make_client, monkeypatch):
+    client = make_client()
+    import app
+
+    def broken():
+        raise RuntimeError("no database")
+
+    monkeypatch.setattr(app.db, "connect", broken)
+    assert client.get("/health").status_code == 503

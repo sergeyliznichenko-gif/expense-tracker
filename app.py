@@ -210,6 +210,18 @@ def admin_log():
     return jsonify(db.log_entries(limit))
 
 
+@app.get("/health")
+def health():
+    """No login and no data: an outside monitor asks this route."""
+    try:
+        conn = db.connect()
+        conn.execute("SELECT 1").fetchone()
+        conn.close()
+        return jsonify({"status": "ok"})
+    except Exception:
+        return jsonify({"status": "db_error"}), 503
+
+
 @app.get("/")
 def index():
     return redirect("/items")
