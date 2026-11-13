@@ -1,0 +1,11 @@
+venv
+.git
+*.db
+.env
+backups
+data
+__pycache__
+.pytest_cache
+tests
+frontend
+legacy
