@@ -66,6 +66,7 @@ If `data.json` is missing or damaged, the program starts with an empty list.
 - `logic.py`: functions over a list of `Item` objects (no `print`, no `input`, no database)
 - `db.py`: SQLite storage: tables `categories`, `expenses`, `audit_log`; the database path comes from `DB_PATH` (default `data.db`)
 - `migrate.py`: one-time migration of an old database (text category) to the `categories` table
+- `migrate_users.py`: one-time migration that adds the `users` table and `user_id` columns
 - `backup.py`: copies `data.db` into `backups/` (a daily scheduled task runs it)
 - `frontend/index.html`: the web page deployed on Netlify
 - `tests/`: pytest tests (`test_logic.py`, `test_app.py`)
@@ -133,27 +134,44 @@ The server listens on 127.0.0.1 only, so it is not visible in the local network.
 
 ## Database
 
-SQLite file `data.db` with three tables:
+SQLite file `data.db` with four tables:
 
 | Table | Columns |
 |---|---|
+| users | id, login (unique, lowercase), password_hash (scrypt), is_admin, created |
 | categories | id, name (unique), monthly_limit |
-| expenses | id, date, category_id (links to categories), amount, title |
-| audit_log | id, ts, action (`add` or `delete`), item_id, details |
+| expenses | id, user_id (links to users), date, category_id (links to categories), amount, title |
+| audit_log | id, ts, action (`add` or `delete`), item_id, details, user_id (who did it) |
 
-`GET /items` and `GET /report` return the category as text, so the web page does not change. An older database with a text category is converted once with `python migrate.py` (make a backup first).
+`GET /items` and `GET /report` return the category as text, so the web page does not change. An older database with a text category is converted once with `python migrate.py`, and `python migrate_users.py` then adds the users table and gives all existing records to the first user, who becomes the admin (make a backup first).
 
-## Admin routes
+## Users and login
 
-They need the `X-Admin-Token` header, and the tunnel blocks `/admin/` from the internet. Create a `.env` file in the project folder (it is in `.gitignore`, never commit it):
+Create a `.env` file in the project folder (it is in `.gitignore`, never commit it):
 
-    ADMIN_TOKEN=a-long-random-string
+    SECRET_KEY=a-long-random-string
+
+The key signs the session cookie, and the app does not start without it. Passwords are stored only as scrypt hashes. The cookie is `Secure`, `HttpOnly` and `SameSite=Lax`, so use the `https://` addresses (the tunnel or Tailscale), not `127.0.0.1`. The older `curl` examples in the lab 7 part above were written before logins existed: now they need a session (`curl -c cookies.txt -X POST .../login ...`, then `curl -b cookies.txt ...`).
 
 | Method | Path | What it does |
 |---|---|---|
-| GET | /admin/export | all expenses (JSON) |
+| POST | /register | create a user (JSON: login, password of 8+ characters) and log in |
+| POST | /login | log in; a wrong login and a wrong password get the same answer |
+| POST | /logout | log out |
+| GET | /me | who is logged in |
+| GET, POST | /items | your expenses, add an expense |
+| DELETE | /items/ID | delete your own expense (someone else's gives 404) |
+| GET | /report, /report/limits | your totals per category |
+
+## Admin routes
+
+They work only for a logged-in user with `is_admin = 1`, and the tunnel blocks `/admin/` from the internet (use them through Tailscale). There is no admin registration: the first user is made admin by `migrate_users.py`.
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | /admin/export | all expenses of all users (JSON) |
 | POST | /admin/import | add a list of expenses (JSON list, at most 1000, all or nothing) |
-| DELETE | /admin/items/ID | delete an expense |
+| DELETE | /admin/items/ID | delete any expense (the log records who did it) |
 | GET | /admin/log | the action log (newest first) |
 
 ## Backups
@@ -177,8 +195,10 @@ The command-line version described in the first part of this file now lives in `
 | сервер розробки в інтернеті | тунель дивиться на waitress, а не на `python app.py` | закрито: waitress; `debug=True` лише в блоці `if __name__ == "__main__"`, тобто для локального запуску |
 | доступ в обхід Cloudflare | `netstat -ano \| grep :8000`: порт слухає лише 127.0.0.1 | закрито: публічної IP немає, доступ лише через тунель |
 | флуд запитами | 100 POST у циклі через https://api...: 65 відповідей 400 і 35 відповідей 429 | закрито: rate limiting у Cloudflare |
-| адмінка з інтернету | /admin/export з телефона через інтернет дає 404; через Tailscale без токена 403, з токеном працює | закрито: правило тунелю, перевірка CF-Connecting-IP, токен |
-| публічне видалення записів | маршрут DELETE /items/<id> прибрано, видалення лише через /admin/ з токеном | закрито |
+| адмінка з інтернету | /admin/export з телефона через інтернет дає 404; через Tailscale без входу 401, користувачем без прав 403, адміном працює | закрито: правило тунелю, перевірка CF-Connecting-IP, роль is_admin |
+| чужі записи | DELETE чужого запису дає 404, список показує лише записи користувача (тести) | закрито: кожен запит фільтрується за user_id із сесії |
+| паролі | у базі лише хеші scrypt | закрито: generate_password_hash |
+| вгадування паролів | 100 запитів на /login: 49 відповідей 401 і 51 відповідь 429 | закрито: rate limiting у Cloudflare охоплює /items, /login і /register |
 | секрети в git | `git log -p \| grep -i token` і пошук .env, cert.pem, UUID.json в історії: порожньо | закрито: .env у .gitignore, токен тунелю в репозиторії немає |
 | втрата даних | базу відновлено з копії backups/data-2026-11-09.db, сайт працює | закрито: backup.py щодня о 20:00 (планувальник Windows) |
 | копії на тому ж диску | копії лежать на одному диску з базою | відкрито: від поломки диска не рятує; прийнятно для навчального проєкту, але раз на тиждень копіюю backups/ на інший пристрій |
