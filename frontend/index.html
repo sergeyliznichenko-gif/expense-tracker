@@ -7,56 +7,148 @@
   <style>
     body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; line-height: 1.4; }
     form { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin-bottom: 1rem; }
-    form input { padding: .5rem; font: inherit; min-width: 0; }
-    form button { grid-column: 1 / -1; padding: .6rem; font: inherit; cursor: pointer; }
+    input, button { padding: .5rem; font: inherit; min-width: 0; }
+    button { cursor: pointer; }
+    #authForm button, #form button { grid-column: auto; }
+    #form button { grid-column: 1 / -1; }
     ul { list-style: none; padding: 0; margin: 0; }
-    li { display: flex; justify-content: space-between; gap: 1rem; padding: .4rem 0; border-bottom: 1px solid #ddd; }
+    li { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .4rem 0; border-bottom: 1px solid #ddd; }
     .meta { color: #666; font-size: .9rem; }
-    #status { min-height: 1.4em; }
+    .row { display: flex; align-items: center; gap: .5rem; }
+    #message { min-height: 1.4em; }
+    [hidden] { display: none !important; }
   </style>
 </head>
 <body>
   <h1>Витрати</h1>
 
-  <form id="form">
-    <input id="date" type="date" required>
-    <input id="category" placeholder="категорія" required>
-    <input id="title" placeholder="назва" required>
-    <input id="amount" type="number" step="0.01" placeholder="сума" required>
-    <button>Додати</button>
-  </form>
+  <section id="auth" hidden>
+    <form id="authForm">
+      <input id="login" placeholder="логін" autocomplete="username" required minlength="3">
+      <input id="password" type="password" placeholder="пароль (від 8 символів)" autocomplete="current-password" required minlength="8">
+      <button type="submit">Увійти</button>
+      <button type="button" id="registerBtn">Зареєструватися</button>
+    </form>
+  </section>
 
-  <p id="status"></p>
-  <ul id="list"></ul>
+  <section id="app" hidden>
+    <p class="row"><span id="who"></span> <button id="logoutBtn">Вийти</button></p>
+    <form id="form">
+      <input id="date" type="date" required>
+      <input id="category" placeholder="категорія" required>
+      <input id="title" placeholder="назва" required>
+      <input id="amount" type="number" step="0.01" placeholder="сума" required>
+      <button>Додати</button>
+    </form>
+    <ul id="list"></ul>
+  </section>
+
+  <p id="message"></p>
 
   <script>
     const API = "https://api.liznichenko.pp.ua";
-    const status = document.getElementById("status");
+    const message = document.getElementById("message");
+    const authSection = document.getElementById("auth");
+    const appSection = document.getElementById("app");
+    const loginInput = document.getElementById("login");
+    const passwordInput = document.getElementById("password");
+
+    async function api(path, options = {}) {
+      const init = { credentials: "include", ...options };      // send the session cookie
+      if (options.body) init.headers = { "Content-Type": "application/json" };
+      const response = await fetch(API + path, init);
+      let data = null;
+      try { data = await response.json(); } catch (error) { }
+      return { ok: response.ok, status: response.status, data };
+    }
+
+    function showLoggedOut(text) {
+      appSection.hidden = true;
+      authSection.hidden = false;
+      document.getElementById("list").innerHTML = "";
+      message.textContent = text || "";
+    }
+
+    function showLoggedIn(user) {
+      authSection.hidden = true;
+      appSection.hidden = false;
+      document.getElementById("who").textContent = "Ви увійшли як " + user.login;
+      message.textContent = "";
+      load();
+    }
 
     async function load() {
       try {
-        const response = await fetch(API + "/items");
-        const items = await response.json();
+        const r = await api("/items");
+        if (r.status === 401) { showLoggedOut("сесія закінчилась, увійдіть знову"); return; }
         const list = document.getElementById("list");
         list.innerHTML = "";
-        for (const item of items) {
+        for (const item of r.data) {
           const li = document.createElement("li");
 
           const left = document.createElement("span");
           left.textContent = item.title;
 
           const right = document.createElement("span");
-          right.className = "meta";
-          right.textContent = `${item.date}  ${item.category}  ${item.amount}`;
+          right.className = "row";
+          const meta = document.createElement("span");
+          meta.className = "meta";
+          meta.textContent = `${item.date}  ${item.category}  ${item.amount}`;
+          const del = document.createElement("button");
+          del.textContent = "×";
+          del.title = "видалити";
+          del.addEventListener("click", () => remove(item.id));
+          right.appendChild(meta);
+          right.appendChild(del);
 
           li.appendChild(left);
           li.appendChild(right);
           list.appendChild(li);
         }
       } catch (error) {
-        status.textContent = "не вдалося завантажити список";
+        message.textContent = "не вдалося завантажити список";
       }
     }
+
+    async function remove(id) {
+      try {
+        const r = await api("/items/" + id, { method: "DELETE" });
+        if (r.status === 401) { showLoggedOut("сесія закінчилась, увійдіть знову"); return; }
+        if (!r.ok) message.textContent = "не вдалося видалити";
+      } catch (error) {
+        message.textContent = "немає зв’язку з сервером";
+      }
+      load();
+    }
+
+    async function authenticate(path) {
+      try {
+        const r = await api(path, {
+          method: "POST",
+          body: JSON.stringify({ login: loginInput.value.trim(), password: passwordInput.value }),
+        });
+        if (r.ok) { passwordInput.value = ""; showLoggedIn(r.data); return; }
+        if (r.status === 401) message.textContent = "неправильний логін або пароль";
+        else if (r.status === 409) message.textContent = "цей логін зайнятий";
+        else if (r.status === 400) message.textContent = "логін від 3 символів, пароль від 8";
+        else message.textContent = "помилка " + r.status;
+      } catch (error) {
+        message.textContent = "немає зв’язку з сервером";
+      }
+    }
+
+    document.getElementById("authForm").addEventListener("submit", (event) => {
+      event.preventDefault();
+      authenticate("/login");
+    });
+    document.getElementById("registerBtn").addEventListener("click", () => {
+      if (loginInput.reportValidity() && passwordInput.reportValidity()) authenticate("/register");
+    });
+
+    document.getElementById("logoutBtn").addEventListener("click", async () => {
+      try { await api("/logout", { method: "POST" }); } catch (error) { }
+      showLoggedOut("");
+    });
 
     document.getElementById("form").addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -67,21 +159,26 @@
         amount: document.getElementById("amount").value,
       };
       try {
-        const response = await fetch(API + "/items", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        const result = await response.json();
-        status.textContent = response.ok ? "додано" : "помилка: " + result.error;
-        if (response.ok) event.target.reset();
+        const r = await api("/items", { method: "POST", body: JSON.stringify(body) });
+        if (r.status === 401) { showLoggedOut("сесія закінчилась, увійдіть знову"); return; }
+        message.textContent = r.ok ? "додано" : "помилка: " + (r.data && r.data.error);
+        if (r.ok) event.target.reset();
       } catch (error) {
-        status.textContent = "помилка: немає зв’язку з сервером";
+        message.textContent = "помилка: немає зв’язку з сервером";
       }
       load();
     });
 
-    load();
+    async function start() {
+      try {
+        const r = await api("/me");
+        if (r.ok) showLoggedIn(r.data);
+        else showLoggedOut("");
+      } catch (error) {
+        showLoggedOut("не вдалося зв’язатися з сервером");
+      }
+    }
+    start();
   </script>
 </body>
 </html>
