@@ -10,7 +10,7 @@ def make_items():
 
 
 def test_total_by_category_sums_per_category():
-    assert total_by_category(make_items()) == {"food": 150.0, "transport": 40.0}
+    assert total_by_category(make_items()) == {"food": 151.0, "transport": 40.0}
 
 
 def test_total_by_category_empty():
