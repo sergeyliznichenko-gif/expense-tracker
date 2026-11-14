@@ -116,21 +116,34 @@ A wrong request gets code 400 (bad data) or 404 (not found) and a JSON message, 
 
 ## Running the server
 
-Run everything from the project folder (it contains `data.db`).
+The service runs as a Docker container. There are two folders on the computer:
 
-1. First terminal, the server:
+- `expense-tracker`: the working copy. Write code and tests here, then `git push`.
+- `expense-tracker-server`: a clone of the same repository that Docker runs from. Never edit anything in it by hand: the automatic deploy runs `git pull` there, and local changes would make that fail. It also holds two files that are not in git: `.env` (with `SECRET_KEY=...`) and `data/data.db` (the database, mounted into the container).
 
-       source venv/Scripts/activate      # Linux/macOS: source venv/bin/activate
-       python -m waitress --listen=127.0.0.1:8000 app:app
+First setup of the server copy (once):
 
-2. Second terminal, the tunnel (always start the server first, then the tunnel):
+    git clone https://github.com/sergeyliznichenko-gif/expense-tracker.git expense-tracker-server
+    cd expense-tracker-server
+    mkdir data
+    cp ../expense-tracker/.env .env
+    cp ../expense-tracker/data.db data/data.db
+    docker compose up -d --build
 
-       cloudflared tunnel --url http://127.0.0.1:8000
+The database must be in `data/` before the first start, otherwise the app creates an empty one.
 
-Cloudflare prints an address like `https://random-words.trycloudflare.com`.
-Open `.../items` on it. Stop with `Ctrl+C` in both terminals.
+What has to run (each in its own window):
 
-The server listens on 127.0.0.1 only, so it is not visible in the local network.
+1. Docker Desktop. The container starts by itself (`restart: always`); check it with `docker compose ps`.
+2. The tunnel: `cloudflared tunnel --protocol http2 run --token TOKEN`. The token is in the Cloudflare dashboard (Zero Trust, Networks, Tunnels) and is never stored in the repository. The public hostname `api.liznichenko.pp.ua` points to `http://127.0.0.1:8000`; the `/admin/` rule and the rate limiting rule are set in the Cloudflare dashboard.
+3. The GitHub runner, for automatic deploys: go to the `actions-runner` folder and run `.\run.cmd`.
+4. Tailscale (`tailscale serve --bg 8000`), for admin access through the private `ts.net` address.
+
+Deploy: every `git push` to `main` starts the workflow `.github/workflows/ci.yml`. The `test` job runs `pytest` on GitHub; only if it passes, the `deploy` job runs on the self-hosted runner: `git pull` and `docker compose up -d --build` in `expense-tracker-server`. A failing test blocks the deploy, and the service keeps running the previous version. The repository is public, so in Settings, Actions, General, workflows from outside contributors need approval.
+
+Monitoring: `GET /health` needs no login and returns `{"status":"ok"}`, or 503 with `{"status":"db_error"}` when the database does not answer. UptimeRobot checks `https://api.liznichenko.pp.ua/health` every 5 minutes and sends an email when it fails and when it recovers.
+
+Useful commands (in `expense-tracker-server`): `docker compose ps`, `docker compose logs -f api`, `docker compose stop`, `docker compose up -d`.
 
 ## Database
 
